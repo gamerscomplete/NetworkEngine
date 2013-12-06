@@ -120,9 +120,7 @@ std::cout << "womp womp womp\n";
 }
 
 void* SocketHandler(void* lp){
-#define MAXDATASIZE 100 // max number of bytes we can get at once 
-
-//    int *csock = (int*)lp.csock;
+#define MAXDATASIZE 100 // max number of bytes we can get at once
     int *csock = (int*)lp;
     char buffer[MAXDATASIZE];
     int buffer_len = 1024;
@@ -130,6 +128,8 @@ void* SocketHandler(void* lp){
     std::string motd;
     std::string reply_buffer;
     std::string readpipe;
+    fd_set connections;
+    fd_set readConnections;
 
 //Code to connect to unity game server.
     int sockfd, numbytes;
@@ -137,6 +137,9 @@ void* SocketHandler(void* lp){
     struct addrinfo hints, *servinfo, *p;
     int rv;
     char s[INET6_ADDRSTRLEN];
+
+    FD_ZERO(&connections); //Clear the connection set
+    FD_ZERO(&readConnections); //Clear the connection set
 
     memset(&hints, 0, sizeof hints);
     hints.ai_family = AF_UNSPEC;
@@ -196,43 +199,79 @@ void* SocketHandler(void* lp){
         goto FINISH;
     }
 
+
+/*
+* MEAT AND TATOS HERE
+*/
+
+//Add the primary connection to the select connections
+FD_SET(*csock, &connections);
+FD_SET(sockfd, &connections);
+
     while(true) {
         memset(buffer, 0, buffer_len);
-        if((bytecount = recv(*csock, buffer, buffer_len, 0)) == -1){
-            fprintf(stderr, "Error receiving data %d\n", errno);
-            goto FINISH;
-        }
-        if(bytecount == 0) {
-            std::cout << "BOOM\n";
-            goto FINISH;
+        readConnections = connections;
+        if(select(sockfd+1, &readConnections, NULL, NULL, NULL) == -1) {
+            perror("select");
         }
 
-        printf("Received bytes %d\nReceived string \"%s\"\n", bytecount, buffer);
+        if(FD_ISSET(*csock, &readConnections)) {
+            std::cout << "Recieving data from client thread\n";
+            if((bytecount = recv(*csock, buffer, buffer_len, 0)) == -1){
+                fprintf(stderr, "Error receiving data %d\n", errno);
+                goto FINISH;
+            }
+            printf("Received client bytes %d\nReceived string \"%s\"\n", bytecount, buffer);
+            if(bytecount == 0) {
+                std::cout << "BOOM\n";
+                goto FINISH;
+            }
 
-        if(strlen(buffer) > 0) {
-            reply_buffer = networkHandler.process_message(buffer);
+
+            if(strlen(buffer) > 0) {
+                reply_buffer = networkHandler.process_message(buffer);
+            }
+
+            if(reply_buffer != "") {
+                std::cout << "Reply buffer not blank. Sending return\n";
+                if((bytecount = send(*csock, reply_buffer.c_str(), strlen(reply_buffer.c_str()), 0))== -1){
+                    std::cout << "bork bork bork\n";
+                    fprintf(stderr, "Error sending data %d\n", errno);
+                    goto FINISH;
+                }
+                printf("Sent bytes %d\n", bytecount);
+                if(reply_buffer == "FOLD|true") {
+                    std::cout << "Recieved fold command. Terminating\n";
+                    goto FINISH;
+                }
+            } else {
+//                std::cout << "Reply buffer empty\n";
+            }
+            memset(buffer, 0, buffer_len);
         }
 
-        if(reply_buffer != "") {
-            std::cout << "Reply buffer not blank. Sending return\n";
-            if((bytecount = send(*csock, reply_buffer.c_str(), strlen(reply_buffer.c_str()), 0))== -1){
-                std::cout << "bork bork bork\n";
+        if(FD_ISSET(sockfd, &readConnections)) {
+            std::cout << "Data on server sock ready\n";
+            if((bytecount = recv(sockfd, buffer, buffer_len, 0)) == -1){
+                fprintf(stderr, "Error receiving data %d\n", errno);
+                goto FINISH;
+            }
+            printf("Received from server bytes %d\nReceived string \"%s\"\n", bytecount, buffer);
+            if(bytecount == 0) {
+                std::cout << "Lost server connection\n";
+                goto FINISH;
+            }
+            if((bytecount = send(*csock, buffer, strlen(buffer), 0))== -1){
+                std::cout << "Could not send data back to client\n";
                 fprintf(stderr, "Error sending data %d\n", errno);
                 goto FINISH;
             }
-            printf("Sent bytes %d\n", bytecount);
-            if(reply_buffer == "FOLD|true") {
-                std::cout << "Recieved fold command. Terminating\n";
-                goto FINISH;
-            }
-        } else {
-            std::cout << "Reply buffer empty\n";
         }
     }
 
 FINISH:
     std::cout << "Terminating thread\n";
-    close(sockfd);
+//    cfree(&sockfd);
     free(csock);
     return 0;
 }
