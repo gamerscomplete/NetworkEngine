@@ -27,8 +27,8 @@
 //#include <arpa/inet.h>
 
 void* SocketHandler(void*);
-std::string process_message(std::string message);
-std::vector<std::string> Splitter(std::string del, std::string str);
+//std::string process_message(std::string message);
+//std::vector<std::string> Splitter(std::string del, std::string str);
 
 void *get_in_addr(struct sockaddr *sa)
 {
@@ -38,21 +38,14 @@ void *get_in_addr(struct sockaddr *sa)
 
 }
 
-struct socketPack {
-    int* csock;
-    Config config;
-};
-
 int main(int argc, char *argv[]){
 
     if(argc <= 1) {
         std::cout << "Usage: " << argv[0] << " <filename>" << std::endl;
         exit(1);
     }
-    socketPack packedSocket;
     char *pFilename = argv[1];
     Config config = Config(pFilename);
-    packedSocket.config = config;
     int host_port = Config::LookupInt("Port");
     std::cout << "Listening on port: " << host_port << "\n";
     struct sockaddr_in my_addr;
@@ -103,10 +96,8 @@ int main(int argc, char *argv[]){
         printf("waiting for a connection\n");
         csock = (int*)malloc(sizeof(int));
         if((*csock = accept( hsock, (sockaddr*)&sadr, &addr_size))!= -1) {
-            packedSocket.csock = csock;
             printf("---------------------\nReceived connection from %s\n",inet_ntoa(sadr.sin_addr));
             pthread_create(&thread_id,0,&SocketHandler, (void*)csock );
-//            pthread_create(&thread_id,0,&SocketHandler, (socketPack*)packedSocket );
             pthread_detach(thread_id);
         }
         else{
@@ -120,8 +111,8 @@ std::cout << "womp womp womp\n";
 }
 
 void* SocketHandler(void* lp){
-#define MAXDATASIZE 100 // max number of bytes we can get at once
     int *csock = (int*)lp;
+    #define MAXDATASIZE 1024 // max number of bytes we can get at once
     char buffer[MAXDATASIZE];
     int buffer_len = 1024;
     int bytecount;
@@ -149,6 +140,7 @@ void* SocketHandler(void* lp){
     dg_net networkHandler;
 
     if ((rv = getaddrinfo("localhost", port.c_str(), &hints, &servinfo)) != 0) {
+//    if ((rv = getaddrinfo("10.1.10.101", port.c_str(), &hints, &servinfo)) != 0) {
         fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
         goto FINISH;
     }
@@ -180,30 +172,17 @@ void* SocketHandler(void* lp){
 
     freeaddrinfo(servinfo); // all done with this structure
 
-/*    if ((numbytes = recv(sockfd, buf, MAXDATASIZE-1, 0)) == -1) {
-        perror("recv");
-        exit(1);
-    }
-    buf[numbytes] = '\0';
-    std::cout << "Recieved: " << buf << "\n";*/
-
-
-    if (send(sockfd, "Hello, world!", 13, 0) == -1)
-        perror("send");
     networkHandler.SetFD(sockfd);
 
-//Sending welcome message of the day
     motd = networkHandler.GetMOTD();
     if((bytecount = send(*csock, motd.c_str(), strlen(motd.c_str()), 0))== -1){
         fprintf(stderr, "Error sending data %d\n", errno);
         goto FINISH;
     }
 
-
 /*
 * MEAT AND TATOS HERE
 */
-
 //Add the primary connection to the select connections
 FD_SET(*csock, &connections);
 FD_SET(sockfd, &connections);
@@ -223,7 +202,8 @@ FD_SET(sockfd, &connections);
             }
             printf("Received client bytes %d\nReceived string \"%s\"\n", bytecount, buffer);
             if(bytecount == 0) {
-                std::cout << "BOOM\n";
+                std::cout << "Client disconected. Log them out.\n";
+                networkHandler.Logout();
                 goto FINISH;
             }
 
@@ -268,10 +248,10 @@ FD_SET(sockfd, &connections);
             }
         }
     }
-
 FINISH:
     std::cout << "Terminating thread\n";
-//    cfree(&sockfd);
+    close(sockfd);
     free(csock);
+    std::cout << "Cleared freeing csock and returning 0\n";
     return 0;
 }

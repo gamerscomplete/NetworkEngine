@@ -84,6 +84,9 @@ std::string dg_net::GetMOTD() {
 
 void dg_net::Logout() {
     PQfinish(conn);
+//    free(conn);
+//    free(res);
+    SendServerMessage("LOGOUT|");
 }
 
 std::string dg_net::process_message(std::string message) {
@@ -107,20 +110,20 @@ std::string dg_net::process_message(std::string message) {
     }
 
     if(tempMessage[0] == "LOGIN") {
-        std::cout << "Login\n";
+        //std::cout << "Login\n";
         return DoLogin(tempMessage[1]);
     } else if(tempMessage[0] == "INPUTS") {
-        std::cout << "Inputs\n";
+        //std::cout << "Inputs\n";
         PassInputs(tempMessage[1]);
     } else if(tempMessage[0] == "PING") {
-        std::cout << "Ping\n";
+        //std::cout << "Ping\n";
         return "PONG|" + tempMessage[1];
     } else if(tempMessage[0] == "FOLD") {
-        std::cout << "Fold\n";
+        //std::cout << "Fold\n";
         return "FOLD|true";
     }
 
-    std::cout << "Made it past process_message\n";
+//    std::cout << "Made it past process_message\n";
     return "";
 }
 
@@ -212,7 +215,7 @@ bool dg_net::InstantiatePlayer() {
 
 void dg_net::PassInputs(std::string inputs) {
     std::cout << "Passing inputs\n";
-    std::string temp = "INPUTS|" + stringify(playerID) + ":" + inputs;
+    std::string temp = "INPUTS|" + inputs;
     SendServerMessage(temp);
     //Take inputs string and pass them to master unity thread
 }
