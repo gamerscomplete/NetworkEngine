@@ -18,13 +18,15 @@
 //#include <stdlib.h>
 //#include <unistd.h>
 //#include <errno.h>
-//#include <string.h>
 #include <netdb.h>
 //#include <sys/types.h>
 //#include <netinet/in.h>
 //#include <sys/socket.h>
 
 //#include <arpa/inet.h>
+
+
+std::string game_server_port = "";
 
 void* SocketHandler(void*);
 //std::string process_message(std::string message);
@@ -47,6 +49,7 @@ int main(int argc, char *argv[]){
     char *pFilename = argv[1];
     Config config = Config(pFilename);
     int host_port = Config::LookupInt("Port");
+    game_server_port = Config::LookupString("GameServerPort");
     std::cout << "Listening on port: " << host_port << "\n";
     struct sockaddr_in my_addr;
     int hsock;
@@ -136,10 +139,9 @@ void* SocketHandler(void* lp){
     hints.ai_family = AF_UNSPEC;
     hints.ai_socktype = SOCK_STREAM;
 
-    std::string port = "10003";
     dg_net networkHandler;
 
-    if ((rv = getaddrinfo("localhost", port.c_str(), &hints, &servinfo)) != 0) {
+    if ((rv = getaddrinfo("localhost", game_server_port.c_str(), &hints, &servinfo)) != 0) {
 //    if ((rv = getaddrinfo("10.1.10.101", port.c_str(), &hints, &servinfo)) != 0) {
         fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
         goto FINISH;
